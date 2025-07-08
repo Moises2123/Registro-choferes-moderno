@@ -35,7 +35,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { Plus, Edit, Trash2, Users, Clock, MapPin, Download, Printer, AlertCircle } from "lucide-react"
 import { supabase, type ChoferRegistro, getPeruDateTime } from "@/lib/supabase"
-import { downloadPDF, printPDF } from "@/lib/pdf-utils"
+import { downloadPDF, printPDF, checkPDFLibraries } from "@/lib/pdf-utils"
 import { ExportOptions } from "@/components/ui/export-options"
 import { testSupabaseConnection, checkTableExists } from "@/lib/supabase-check"
 
@@ -55,6 +55,7 @@ export default function ChoferRegistry() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingRegistro, setEditingRegistro] = useState<ChoferRegistro | null>(null)
   const [connectionError, setConnectionError] = useState<string | null>(null)
+  const [pdfLibrariesOk, setPdfLibrariesOk] = useState(false)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
@@ -74,6 +75,13 @@ export default function ChoferRegistry() {
   const initializeApp = async () => {
     try {
       console.log("🚀 Inicializando aplicación...")
+
+      // Verificar librerías PDF
+      const pdfOk = checkPDFLibraries()
+      setPdfLibrariesOk(pdfOk)
+      if (!pdfOk) {
+        console.warn("⚠️ Librerías PDF no disponibles")
+      }
 
       // Verificar conexión a Supabase
       const connectionOk = await testSupabaseConnection()
@@ -272,38 +280,78 @@ export default function ChoferRegistry() {
     })
   }
 
-  const handleDownloadPDF = () => {
-    if (registros.length === 0) {
+  const handleDownloadPDF = async () => {
+    try {
+      if (!pdfLibrariesOk) {
+        toast({
+          title: "Error",
+          description: "Las librerías PDF no están disponibles",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (registros.length === 0) {
+        toast({
+          title: "Sin datos",
+          description: "No hay registros para descargar",
+          variant: "destructive",
+        })
+        return
+      }
+
+      console.log("🔄 Iniciando descarga de PDF...")
+      await downloadPDF(registros, `registro-choferes-${new Date().toISOString().split("T")[0]}.pdf`)
+
       toast({
-        title: "Sin datos",
-        description: "No hay registros para descargar",
+        title: "Descarga exitosa",
+        description: "El archivo PDF se ha descargado correctamente",
+      })
+    } catch (error) {
+      console.error("❌ Error en descarga:", error)
+      toast({
+        title: "Error en descarga",
+        description: error.message || "No se pudo descargar el PDF",
         variant: "destructive",
       })
-      return
     }
-
-    downloadPDF(registros, `registro-choferes-${new Date().toISOString().split("T")[0]}.pdf`)
-    toast({
-      title: "Descarga exitosa",
-      description: "El archivo PDF se ha descargado correctamente",
-    })
   }
 
-  const handlePrint = () => {
-    if (registros.length === 0) {
+  const handlePrint = async () => {
+    try {
+      if (!pdfLibrariesOk) {
+        toast({
+          title: "Error",
+          description: "Las librerías PDF no están disponibles",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (registros.length === 0) {
+        toast({
+          title: "Sin datos",
+          description: "No hay registros para imprimir",
+          variant: "destructive",
+        })
+        return
+      }
+
+      console.log("🔄 Iniciando impresión...")
+      await printPDF(registros)
+
       toast({
-        title: "Sin datos",
-        description: "No hay registros para imprimir",
+        title: "Impresión iniciada",
+        description: "Se ha abierto la ventana de impresión",
+      })
+    } catch (error) {
+      console.error("❌ Error en impresión:", error)
+      toast({
+        title: "Error en impresión",
+        description: error.message || "No se pudo imprimir el PDF",
         variant: "destructive",
       })
-      return
     }
-
-    printPDF(registros)
-    toast({
-      title: "Impresión iniciada",
-      description: "Se ha abierto la ventana de impresión",
-    })
   }
 
   if (loading) {
@@ -354,6 +402,9 @@ export default function ChoferRegistry() {
         <div className="text-center py-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Sistema de Registro de Choferes</h1>
           <p className="text-gray-600 text-lg">Control de entradas y salidas - Zona horaria: Lima, Perú</p>
+          {!pdfLibrariesOk && (
+            <div className="mt-2 text-amber-600 text-sm">⚠️ Funciones PDF limitadas - Verifica las dependencias</div>
+          )}
         </div>
 
         {/* Stats Cards */}
@@ -418,6 +469,7 @@ export default function ChoferRegistry() {
               onClick={handleDownloadPDF}
               variant="outline"
               className="bg-green-600 hover:bg-green-700 text-white border-green-600"
+              disabled={!pdfLibrariesOk || registros.length === 0}
             >
               <Download className="mr-2 h-5 w-5" />
               Descargar Todo
@@ -426,6 +478,7 @@ export default function ChoferRegistry() {
               onClick={handlePrint}
               variant="outline"
               className="bg-purple-600 hover:bg-purple-700 text-white border-purple-600"
+              disabled={!pdfLibrariesOk || registros.length === 0}
             >
               <Printer className="mr-2 h-5 w-5" />
               Imprimir Todo
