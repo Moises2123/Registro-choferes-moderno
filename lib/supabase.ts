@@ -18,3 +18,11 @@ export type ChoferRegistro = {
   created_at: string
   updated_at: string
 }
+
+// Agregar función para formatear fecha en zona horaria de Lima
+export const getPeruDateTime = () => {
+  const now = new Date()
+  // Crear fecha en zona horaria de Lima
+  const peruTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Lima" }))
+  return peruTime
+}

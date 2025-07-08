@@ -33,8 +33,11 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
-import { Plus, Edit, Trash2, Users, Clock, MapPin } from "lucide-react"
-import { supabase, type ChoferRegistro } from "@/lib/supabase"
+import { Plus, Edit, Trash2, Users, Clock, MapPin, Download, Printer } from "lucide-react"
+import { supabase, type ChoferRegistro, getPeruDateTime } from "@/lib/supabase"
+import { downloadPDF, printPDF } from "@/lib/pdf-utils"
+// Agregar import para el nuevo componente
+import { ExportOptions } from "@/components/ui/export-options"
 
 const CHOFERES = [
   "Morris Larrañaga Policarpio",
@@ -100,8 +103,7 @@ export default function ChoferRegistry() {
     }
 
     try {
-      const now = new Date()
-      const peruTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Lima" }))
+      const peruTime = getPeruDateTime()
 
       if (editingRegistro) {
         const { error } = await supabase
@@ -112,21 +114,33 @@ export default function ChoferRegistry() {
           })
           .eq("id", editingRegistro.id)
 
-        if (error) throw error
+        if (error) {
+          console.error("Error updating record:", error)
+          throw error
+        }
 
         toast({
           title: "Éxito",
           description: "Registro actualizado correctamente",
         })
       } else {
-        const { error } = await supabase.from("chofer_registros").insert([
+        const { data, error } = await supabase.from("chofer_registros").insert([
           {
-            ...formData,
+            nombre_chofer: formData.nombre_chofer,
+            tipo: formData.tipo,
+            destino: formData.destino || null,
+            diligencia: formData.diligencia || null,
+            sustento: formData.sustento || null,
+            solicitud: formData.solicitud || null,
+            responsable: formData.responsable || null,
             fecha_hora: peruTime.toISOString(),
           },
         ])
 
-        if (error) throw error
+        if (error) {
+          console.error("Error inserting record:", error)
+          throw error
+        }
 
         toast({
           title: "Éxito",
@@ -138,9 +152,10 @@ export default function ChoferRegistry() {
       fetchRegistros()
       setIsDialogOpen(false)
     } catch (error) {
+      console.error("Database error:", error)
       toast({
         title: "Error",
-        description: "No se pudo guardar el registro",
+        description: `No se pudo guardar el registro: ${error.message || "Error desconocido"}`,
         variant: "destructive",
       })
     }
@@ -203,6 +218,40 @@ export default function ChoferRegistry() {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
+    })
+  }
+
+  const handleDownloadPDF = () => {
+    if (registros.length === 0) {
+      toast({
+        title: "Sin datos",
+        description: "No hay registros para descargar",
+        variant: "destructive",
+      })
+      return
+    }
+
+    downloadPDF(registros, `registro-choferes-${new Date().toISOString().split("T")[0]}.pdf`)
+    toast({
+      title: "Descarga exitosa",
+      description: "El archivo PDF se ha descargado correctamente",
+    })
+  }
+
+  const handlePrint = () => {
+    if (registros.length === 0) {
+      toast({
+        title: "Sin datos",
+        description: "No hay registros para imprimir",
+        variant: "destructive",
+      })
+      return
+    }
+
+    printPDF(registros)
+    toast({
+      title: "Impresión iniciada",
+      description: "Se ha abierto la ventana de impresión",
     })
   }
 
@@ -280,124 +329,152 @@ export default function ChoferRegistry() {
         </div>
 
         {/* Add New Record Button */}
-        <div className="flex justify-end mb-6">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                onClick={resetForm}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-lg"
-              >
-                <Plus className="mr-2 h-5 w-5" />
-                Nuevo Registro
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>{editingRegistro ? "Editar Registro" : "Nuevo Registro de Chofer"}</DialogTitle>
-                <DialogDescription>
-                  Complete la información del registro. Los campos marcados con * son obligatorios.
-                </DialogDescription>
-              </DialogHeader>
+        <div className="flex justify-between items-center mb-6">
+          <ExportOptions registros={registros} onToast={toast} />
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex gap-3">
+            <Button
+              onClick={handleDownloadPDF}
+              variant="outline"
+              className="bg-green-600 hover:bg-green-700 text-white border-green-600"
+            >
+              <Download className="mr-2 h-5 w-5" />
+              Descargar Todo
+            </Button>
+            <Button
+              onClick={handlePrint}
+              variant="outline"
+              className="bg-purple-600 hover:bg-purple-700 text-white border-purple-600"
+            >
+              <Printer className="mr-2 h-5 w-5" />
+              Imprimir Todo
+            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  onClick={resetForm}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-lg"
+                >
+                  <Plus className="mr-2 h-5 w-5" />
+                  Nuevo Registro
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{editingRegistro ? "Editar Registro" : "Nuevo Registro de Chofer"}</DialogTitle>
+                  <DialogDescription>
+                    Complete la información del registro. Los campos marcados con * son obligatorios.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="nombre_chofer">Nombre del Chofer *</Label>
+                      <Select
+                        value={formData.nombre_chofer}
+                        onValueChange={(value) => setFormData({ ...formData, nombre_chofer: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar chofer" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CHOFERES.map((chofer) => (
+                            <SelectItem key={chofer} value={chofer}>
+                              {chofer}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="tipo">Tipo *</Label>
+                      <Select
+                        value={formData.tipo}
+                        onValueChange={(value) => setFormData({ ...formData, tipo: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Entrada">Entrada</SelectItem>
+                          <SelectItem value="Salida">Salida</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="destino">Destino</Label>
+                      <Input
+                        id="destino"
+                        value={formData.destino}
+                        onChange={(e) => setFormData({ ...formData, destino: e.target.value })}
+                        placeholder="Ingrese el destino"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="responsable">Responsable</Label>
+                      <Input
+                        id="responsable"
+                        value={formData.responsable}
+                        onChange={(e) => setFormData({ ...formData, responsable: e.target.value })}
+                        placeholder="Nombre del responsable"
+                      />
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
-                    <Label htmlFor="nombre_chofer">Nombre del Chofer *</Label>
-                    <Select
-                      value={formData.nombre_chofer}
-                      onValueChange={(value) => setFormData({ ...formData, nombre_chofer: value })}
+                    <Label htmlFor="diligencia">Diligencia</Label>
+                    <Textarea
+                      id="diligencia"
+                      value={formData.diligencia}
+                      onChange={(e) => setFormData({ ...formData, diligencia: e.target.value })}
+                      placeholder="Descripción de la diligencia"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="sustento">Sustento</Label>
+                    <Textarea
+                      id="sustento"
+                      value={formData.sustento}
+                      onChange={(e) => setFormData({ ...formData, sustento: e.target.value })}
+                      placeholder="Sustento del registro"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="solicitud">Solicitud</Label>
+                    <Textarea
+                      id="solicitud"
+                      value={formData.solicitud}
+                      onChange={(e) => setFormData({ ...formData, solicitud: e.target.value })}
+                      placeholder="Detalles de la solicitud"
+                      rows={3}
+                    />
+                  </div>
+
+                  <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-6">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsDialogOpen(false)}
+                      className="w-full sm:w-auto"
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar chofer" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CHOFERES.map((chofer) => (
-                          <SelectItem key={chofer} value={chofer}>
-                            {chofer}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="tipo">Tipo *</Label>
-                    <Select value={formData.tipo} onValueChange={(value) => setFormData({ ...formData, tipo: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Entrada">Entrada</SelectItem>
-                        <SelectItem value="Salida">Salida</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="destino">Destino</Label>
-                    <Input
-                      id="destino"
-                      value={formData.destino}
-                      onChange={(e) => setFormData({ ...formData, destino: e.target.value })}
-                      placeholder="Ingrese el destino"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="responsable">Responsable</Label>
-                    <Input
-                      id="responsable"
-                      value={formData.responsable}
-                      onChange={(e) => setFormData({ ...formData, responsable: e.target.value })}
-                      placeholder="Nombre del responsable"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="diligencia">Diligencia</Label>
-                  <Textarea
-                    id="diligencia"
-                    value={formData.diligencia}
-                    onChange={(e) => setFormData({ ...formData, diligencia: e.target.value })}
-                    placeholder="Descripción de la diligencia"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="sustento">Sustento</Label>
-                  <Textarea
-                    id="sustento"
-                    value={formData.sustento}
-                    onChange={(e) => setFormData({ ...formData, sustento: e.target.value })}
-                    placeholder="Sustento del registro"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="solicitud">Solicitud</Label>
-                  <Textarea
-                    id="solicitud"
-                    value={formData.solicitud}
-                    onChange={(e) => setFormData({ ...formData, solicitud: e.target.value })}
-                    placeholder="Detalles de la solicitud"
-                    rows={3}
-                  />
-                </div>
-
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                    {editingRegistro ? "Actualizar" : "Guardar"} Registro
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+                      Cancelar
+                    </Button>
+                    <Button type="submit" className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto">
+                      {editingRegistro ? "Actualizar" : "Guardar"} Registro
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* Records Table */}
