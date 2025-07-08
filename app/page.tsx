@@ -33,11 +33,11 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
-import { Plus, Edit, Trash2, Users, Clock, MapPin, Download, Printer } from "lucide-react"
+import { Plus, Edit, Trash2, Users, Clock, MapPin, Download, Printer, AlertCircle } from "lucide-react"
 import { supabase, type ChoferRegistro, getPeruDateTime } from "@/lib/supabase"
 import { downloadPDF, printPDF } from "@/lib/pdf-utils"
-// Agregar import para el nuevo componente
 import { ExportOptions } from "@/components/ui/export-options"
+import { testSupabaseConnection, checkTableExists } from "@/lib/supabase-check"
 
 const CHOFERES = [
   "Morris Larrañaga Policarpio",
@@ -54,6 +54,7 @@ export default function ChoferRegistry() {
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingRegistro, setEditingRegistro] = useState<ChoferRegistro | null>(null)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
@@ -67,22 +68,60 @@ export default function ChoferRegistry() {
   })
 
   useEffect(() => {
-    fetchRegistros()
+    initializeApp()
   }, [])
+
+  const initializeApp = async () => {
+    try {
+      console.log("🚀 Inicializando aplicación...")
+
+      // Verificar conexión a Supabase
+      const connectionOk = await testSupabaseConnection()
+      if (!connectionOk) {
+        setConnectionError("No se pudo conectar a Supabase. Verifica las variables de entorno.")
+        setLoading(false)
+        return
+      }
+
+      // Verificar que la tabla existe
+      const tableExists = await checkTableExists()
+      if (!tableExists) {
+        setConnectionError("La tabla 'chofer_registros' no existe. Ejecuta el script SQL en Supabase.")
+        setLoading(false)
+        return
+      }
+
+      // Cargar registros
+      await fetchRegistros()
+    } catch (error) {
+      console.error("❌ Error inicializando app:", error)
+      setConnectionError("Error inesperado al inicializar la aplicación.")
+      setLoading(false)
+    }
+  }
 
   const fetchRegistros = async () => {
     try {
+      console.log("📥 Cargando registros...")
+
       const { data, error } = await supabase
         .from("chofer_registros")
         .select("*")
         .order("fecha_hora", { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error("❌ Error cargando registros:", error)
+        throw error
+      }
+
+      console.log("✅ Registros cargados:", data?.length || 0)
       setRegistros(data || [])
+      setConnectionError(null)
     } catch (error) {
+      console.error("❌ Error en fetchRegistros:", error)
       toast({
         title: "Error",
-        description: "No se pudieron cargar los registros",
+        description: `No se pudieron cargar los registros: ${error.message}`,
         variant: "destructive",
       })
     } finally {
@@ -103,29 +142,13 @@ export default function ChoferRegistry() {
     }
 
     try {
+      console.log("💾 Guardando registro...")
       const peruTime = getPeruDateTime()
 
       if (editingRegistro) {
         const { error } = await supabase
           .from("chofer_registros")
           .update({
-            ...formData,
-            updated_at: peruTime.toISOString(),
-          })
-          .eq("id", editingRegistro.id)
-
-        if (error) {
-          console.error("Error updating record:", error)
-          throw error
-        }
-
-        toast({
-          title: "Éxito",
-          description: "Registro actualizado correctamente",
-        })
-      } else {
-        const { data, error } = await supabase.from("chofer_registros").insert([
-          {
             nombre_chofer: formData.nombre_chofer,
             tipo: formData.tipo,
             destino: formData.destino || null,
@@ -133,15 +156,43 @@ export default function ChoferRegistry() {
             sustento: formData.sustento || null,
             solicitud: formData.solicitud || null,
             responsable: formData.responsable || null,
-            fecha_hora: peruTime.toISOString(),
-          },
-        ])
+            updated_at: peruTime.toISOString(),
+          })
+          .eq("id", editingRegistro.id)
 
         if (error) {
-          console.error("Error inserting record:", error)
+          console.error("❌ Error actualizando:", error)
           throw error
         }
 
+        console.log("✅ Registro actualizado")
+        toast({
+          title: "Éxito",
+          description: "Registro actualizado correctamente",
+        })
+      } else {
+        const { data, error } = await supabase
+          .from("chofer_registros")
+          .insert([
+            {
+              nombre_chofer: formData.nombre_chofer,
+              tipo: formData.tipo,
+              destino: formData.destino || null,
+              diligencia: formData.diligencia || null,
+              sustento: formData.sustento || null,
+              solicitud: formData.solicitud || null,
+              responsable: formData.responsable || null,
+              fecha_hora: peruTime.toISOString(),
+            },
+          ])
+          .select()
+
+        if (error) {
+          console.error("❌ Error insertando:", error)
+          throw error
+        }
+
+        console.log("✅ Registro creado:", data)
         toast({
           title: "Éxito",
           description: "Registro creado correctamente",
@@ -152,7 +203,7 @@ export default function ChoferRegistry() {
       fetchRegistros()
       setIsDialogOpen(false)
     } catch (error) {
-      console.error("Database error:", error)
+      console.error("❌ Error en handleSubmit:", error)
       toast({
         title: "Error",
         description: `No se pudo guardar el registro: ${error.message || "Error desconocido"}`,
@@ -262,6 +313,36 @@ export default function ChoferRegistry() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Cargando registros...</p>
         </div>
+      </div>
+    )
+  }
+
+  if (connectionError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              Error de Conexión
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-gray-600">{connectionError}</p>
+            <div className="space-y-2 text-sm">
+              <p className="font-semibold">Para solucionarlo:</p>
+              <ol className="list-decimal list-inside space-y-1 text-gray-600">
+                <li>Ve a tu proyecto en Supabase</li>
+                <li>Abre el "SQL Editor"</li>
+                <li>Ejecuta el script de creación de tabla</li>
+                <li>Verifica las variables de entorno</li>
+              </ol>
+            </div>
+            <Button onClick={initializeApp} className="w-full">
+              Reintentar Conexión
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     )
   }
