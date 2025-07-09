@@ -48,7 +48,7 @@ export const generatePDF = async (registros: ChoferRegistro[], title = "Registro
     })
     doc.text(`Generado el: ${fechaActual}`, 105, 30, { align: "center" })
 
-    // Preparar datos para la tabla
+    // Preparar datos para la tabla con TODOS los campos
     const tableData = registros.map((registro, index) => {
       const fechaHora = new Date(registro.fecha_hora).toLocaleString("es-PE", {
         timeZone: "America/Lima",
@@ -65,6 +65,8 @@ export const generatePDF = async (registros: ChoferRegistro[], title = "Registro
         registro.tipo || "-",
         registro.destino || "-",
         registro.diligencia || "-",
+        registro.sustento || "-",
+        registro.solicitud || "-",
         registro.responsable || "-",
         fechaHora,
       ]
@@ -72,14 +74,14 @@ export const generatePDF = async (registros: ChoferRegistro[], title = "Registro
 
     console.log("📊 Datos de tabla preparados:", tableData.length, "filas")
 
-    // Configurar tabla
+    // Configurar tabla con todas las columnas
     doc.autoTable({
-      head: [["#", "Chofer", "Tipo", "Destino", "Diligencia", "Responsable", "Fecha y Hora"]],
+      head: [["#", "Chofer", "Tipo", "Destino", "Diligencia", "Sustento", "Solicitud", "Responsable", "Fecha y Hora"]],
       body: tableData,
       startY: 40,
       styles: {
-        fontSize: 8,
-        cellPadding: 3,
+        fontSize: 7,
+        cellPadding: 2,
         overflow: "linebreak",
         halign: "left",
       },
@@ -88,20 +90,23 @@ export const generatePDF = async (registros: ChoferRegistro[], title = "Registro
         textColor: 255,
         fontStyle: "bold",
         halign: "center",
+        fontSize: 8,
       },
       alternateRowStyles: {
         fillColor: [248, 250, 252], // Gris claro
       },
       columnStyles: {
-        0: { halign: "center", cellWidth: 15 },
-        1: { cellWidth: 40 },
-        2: { halign: "center", cellWidth: 20 },
-        3: { cellWidth: 30 },
-        4: { cellWidth: 35 },
-        5: { cellWidth: 30 },
-        6: { cellWidth: 25 },
+        0: { halign: "center", cellWidth: 10 }, // #
+        1: { cellWidth: 25 }, // Chofer
+        2: { halign: "center", cellWidth: 15 }, // Tipo
+        3: { cellWidth: 20 }, // Destino
+        4: { cellWidth: 25 }, // Diligencia
+        5: { cellWidth: 25 }, // Sustento
+        6: { cellWidth: 25 }, // Solicitud
+        7: { cellWidth: 20 }, // Responsable
+        8: { cellWidth: 20 }, // Fecha y Hora
       },
-      margin: { top: 40, left: 10, right: 10 },
+      margin: { top: 40, left: 5, right: 5 },
       didDrawPage: (data) => {
         // Pie de página
         doc.setFontSize(8)
@@ -228,10 +233,10 @@ export const checkPDFLibraries = async () => {
   }
 }
 
-// Función alternativa simple sin autoTable (fallback)
+// Función alternativa simple sin autoTable (fallback) - ACTUALIZADA
 export const generateSimplePDF = async (registros: ChoferRegistro[]) => {
   try {
-    console.log("🔄 Generando PDF simple...")
+    console.log("🔄 Generando PDF simple con todos los campos...")
 
     const jsPDF = (await import("jspdf")).default
     const doc = new jsPDF()
@@ -245,12 +250,12 @@ export const generateSimplePDF = async (registros: ChoferRegistro[]) => {
     const fecha = new Date().toLocaleString("es-PE", { timeZone: "America/Lima" })
     doc.text(`Generado: ${fecha}`, 105, 30, { align: "center" })
 
-    // Registros
+    // Registros con TODOS los campos
     let y = 50
     doc.setFontSize(8)
 
     registros.forEach((registro, index) => {
-      if (y > 270) {
+      if (y > 260) {
         doc.addPage()
         y = 20
       }
@@ -259,14 +264,49 @@ export const generateSimplePDF = async (registros: ChoferRegistro[]) => {
         timeZone: "America/Lima",
       })
 
+      // Encabezado del registro
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "bold")
       doc.text(`${index + 1}. ${registro.nombre_chofer} - ${registro.tipo}`, 10, y)
-      y += 5
-      doc.text(`   Destino: ${registro.destino || "-"}`, 10, y)
-      y += 5
-      doc.text(`   Responsable: ${registro.responsable || "-"}`, 10, y)
-      y += 5
+      y += 6
+
+      // Detalles del registro
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "normal")
+
+      if (registro.destino) {
+        doc.text(`   Destino: ${registro.destino}`, 10, y)
+        y += 4
+      }
+
+      if (registro.diligencia) {
+        // Dividir texto largo en múltiples líneas
+        const diligenciaLines = doc.splitTextToSize(`   Diligencia: ${registro.diligencia}`, 180)
+        doc.text(diligenciaLines, 10, y)
+        y += diligenciaLines.length * 4
+      }
+
+      if (registro.sustento) {
+        // Dividir texto largo en múltiples líneas
+        const sustentoLines = doc.splitTextToSize(`   Sustento: ${registro.sustento}`, 180)
+        doc.text(sustentoLines, 10, y)
+        y += sustentoLines.length * 4
+      }
+
+      if (registro.solicitud) {
+        // Dividir texto largo en múltiples líneas
+        const solicitudLines = doc.splitTextToSize(`   Solicitud: ${registro.solicitud}`, 180)
+        doc.text(solicitudLines, 10, y)
+        y += solicitudLines.length * 4
+      }
+
+      if (registro.responsable) {
+        doc.text(`   Responsable: ${registro.responsable}`, 10, y)
+        y += 4
+      }
+
       doc.text(`   Fecha: ${fechaHora}`, 10, y)
-      y += 10
+      y += 8 // Espacio entre registros
     })
 
     return doc
