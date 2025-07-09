@@ -35,7 +35,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { Plus, Edit, Trash2, Users, Clock, MapPin, Download, Printer, AlertCircle } from "lucide-react"
 import { supabase, type ChoferRegistro, getPeruDateTime } from "@/lib/supabase"
-import { downloadPDF, printPDF, checkPDFLibraries } from "@/lib/pdf-utils"
+import { downloadPDF, printPDF, checkPDFLibraries, generateSimplePDF } from "@/lib/pdf-utils"
 import { ExportOptions } from "@/components/ui/export-options"
 import { testSupabaseConnection, checkTableExists } from "@/lib/supabase-check"
 
@@ -77,10 +77,10 @@ export default function ChoferRegistry() {
       console.log("🚀 Inicializando aplicación...")
 
       // Verificar librerías PDF
-      const pdfOk = checkPDFLibraries()
+      const pdfOk = await checkPDFLibraries()
       setPdfLibrariesOk(pdfOk)
       if (!pdfOk) {
-        console.warn("⚠️ Librerías PDF no disponibles")
+        console.warn("⚠️ Librerías PDF avanzadas no disponibles, usando modo simple")
       }
 
       // Verificar conexión a Supabase
@@ -282,15 +282,6 @@ export default function ChoferRegistry() {
 
   const handleDownloadPDF = async () => {
     try {
-      if (!pdfLibrariesOk) {
-        toast({
-          title: "Error",
-          description: "Las librerías PDF no están disponibles",
-          variant: "destructive",
-        })
-        return
-      }
-
       if (registros.length === 0) {
         toast({
           title: "Sin datos",
@@ -301,7 +292,16 @@ export default function ChoferRegistry() {
       }
 
       console.log("🔄 Iniciando descarga de PDF...")
-      await downloadPDF(registros, `registro-choferes-${new Date().toISOString().split("T")[0]}.pdf`)
+
+      try {
+        // Intentar con PDF avanzado
+        await downloadPDF(registros, `registro-choferes-${new Date().toISOString().split("T")[0]}.pdf`)
+      } catch (error) {
+        // Fallback a PDF simple
+        console.log("🔄 Usando PDF simple como fallback...")
+        const doc = await generateSimplePDF(registros)
+        doc.save(`registro-choferes-simple-${new Date().toISOString().split("T")[0]}.pdf`)
+      }
 
       toast({
         title: "Descarga exitosa",
@@ -319,15 +319,6 @@ export default function ChoferRegistry() {
 
   const handlePrint = async () => {
     try {
-      if (!pdfLibrariesOk) {
-        toast({
-          title: "Error",
-          description: "Las librerías PDF no están disponibles",
-          variant: "destructive",
-        })
-        return
-      }
-
       if (registros.length === 0) {
         toast({
           title: "Sin datos",
@@ -338,7 +329,23 @@ export default function ChoferRegistry() {
       }
 
       console.log("🔄 Iniciando impresión...")
-      await printPDF(registros)
+
+      try {
+        // Intentar con PDF avanzado
+        await printPDF(registros)
+      } catch (error) {
+        // Fallback a PDF simple
+        console.log("🔄 Usando impresión simple como fallback...")
+        const doc = await generateSimplePDF(registros)
+        const pdfBlob = doc.output("blob")
+        const pdfUrl = URL.createObjectURL(pdfBlob)
+        const printWindow = window.open(pdfUrl, "_blank")
+        if (printWindow) {
+          printWindow.onload = () => {
+            setTimeout(() => printWindow.print(), 500)
+          }
+        }
+      }
 
       toast({
         title: "Impresión iniciada",
@@ -402,9 +409,7 @@ export default function ChoferRegistry() {
         <div className="text-center py-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Sistema de Registro de Choferes</h1>
           <p className="text-gray-600 text-lg">Control de entradas y salidas - Zona horaria: Lima, Perú</p>
-          {!pdfLibrariesOk && (
-            <div className="mt-2 text-amber-600 text-sm">⚠️ Funciones PDF limitadas - Verifica las dependencias</div>
-          )}
+          {!pdfLibrariesOk && <div className="mt-2 text-amber-600 text-sm">⚠️ Usando modo PDF simple</div>}
         </div>
 
         {/* Stats Cards */}
@@ -469,7 +474,7 @@ export default function ChoferRegistry() {
               onClick={handleDownloadPDF}
               variant="outline"
               className="bg-green-600 hover:bg-green-700 text-white border-green-600"
-              disabled={!pdfLibrariesOk || registros.length === 0}
+              disabled={registros.length === 0}
             >
               <Download className="mr-2 h-5 w-5" />
               Descargar Todo
@@ -478,7 +483,7 @@ export default function ChoferRegistry() {
               onClick={handlePrint}
               variant="outline"
               className="bg-purple-600 hover:bg-purple-700 text-white border-purple-600"
-              disabled={!pdfLibrariesOk || registros.length === 0}
+              disabled={registros.length === 0}
             >
               <Printer className="mr-2 h-5 w-5" />
               Imprimir Todo

@@ -26,7 +26,7 @@ import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import type { ChoferRegistro } from "@/lib/supabase"
-import { downloadPDF, printPDF } from "@/lib/pdf-utils"
+import { downloadPDF, printPDF, generateSimplePDF } from "@/lib/pdf-utils"
 
 interface ExportOptionsProps {
   registros: ChoferRegistro[]
@@ -60,38 +60,71 @@ export function ExportOptions({ registros, onToast }: ExportOptionsProps) {
     })
   }
 
-  const handleExportFiltered = (action: "download" | "print") => {
-    const filteredRegistros = getFilteredRegistros()
+  const handleExportFiltered = async (action: "download" | "print") => {
+    try {
+      const filteredRegistros = getFilteredRegistros()
 
-    if (filteredRegistros.length === 0) {
+      if (filteredRegistros.length === 0) {
+        onToast({
+          title: "Sin resultados",
+          description: "No hay registros que coincidan con los filtros aplicados",
+          variant: "destructive",
+        })
+        return
+      }
+
+      let title = "Registro de Choferes"
+      if (dateFrom || dateTo || selectedChofer || selectedTipo) {
+        title += " (Filtrado)"
+      }
+
+      if (action === "download") {
+        try {
+          await downloadPDF(
+            filteredRegistros,
+            `registro-choferes-filtrado-${new Date().toISOString().split("T")[0]}.pdf`,
+          )
+        } catch (error) {
+          // Fallback a PDF simple
+          console.log("🔄 Intentando con PDF simple...")
+          const doc = await generateSimplePDF(filteredRegistros)
+          doc.save(`registro-choferes-simple-${new Date().toISOString().split("T")[0]}.pdf`)
+        }
+
+        onToast({
+          title: "Descarga exitosa",
+          description: `Se descargaron ${filteredRegistros.length} registros`,
+        })
+      } else {
+        try {
+          await printPDF(filteredRegistros)
+        } catch (error) {
+          // Fallback a PDF simple
+          console.log("🔄 Intentando impresión simple...")
+          const doc = await generateSimplePDF(filteredRegistros)
+          const pdfBlob = doc.output("blob")
+          const pdfUrl = URL.createObjectURL(pdfBlob)
+          const printWindow = window.open(pdfUrl, "_blank")
+          if (printWindow) {
+            printWindow.onload = () => printWindow.print()
+          }
+        }
+
+        onToast({
+          title: "Impresión iniciada",
+          description: `Se imprimirán ${filteredRegistros.length} registros`,
+        })
+      }
+
+      setIsFilterDialogOpen(false)
+    } catch (error) {
+      console.error("❌ Error en exportación:", error)
       onToast({
-        title: "Sin resultados",
-        description: "No hay registros que coincidan con los filtros aplicados",
+        title: "Error",
+        description: error.message || "Error al exportar registros",
         variant: "destructive",
       })
-      return
     }
-
-    let title = "Registro de Choferes"
-    if (dateFrom || dateTo || selectedChofer || selectedTipo) {
-      title += " (Filtrado)"
-    }
-
-    if (action === "download") {
-      downloadPDF(filteredRegistros, `registro-choferes-filtrado-${new Date().toISOString().split("T")[0]}.pdf`)
-      onToast({
-        title: "Descarga exitosa",
-        description: `Se descargaron ${filteredRegistros.length} registros`,
-      })
-    } else {
-      printPDF(filteredRegistros)
-      onToast({
-        title: "Impresión iniciada",
-        description: `Se imprimirán ${filteredRegistros.length} registros`,
-      })
-    }
-
-    setIsFilterDialogOpen(false)
   }
 
   const clearFilters = () => {

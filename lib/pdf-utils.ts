@@ -1,18 +1,31 @@
-import jsPDF from "jspdf"
-import "jspdf-autotable"
 import type { ChoferRegistro } from "./supabase"
 
-declare module "jspdf" {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF
+// Función para cargar las librerías dinámicamente
+const loadPDFLibraries = async () => {
+  try {
+    // Importación dinámica para evitar problemas con SSR
+    const jsPDF = (await import("jspdf")).default
+    await import("jspdf-autotable")
+
+    return jsPDF
+  } catch (error) {
+    console.error("❌ Error cargando librerías PDF:", error)
+    throw new Error("No se pudieron cargar las librerías PDF")
   }
 }
 
-export const generatePDF = (registros: ChoferRegistro[], title = "Registro de Choferes") => {
+export const generatePDF = async (registros: ChoferRegistro[], title = "Registro de Choferes") => {
   try {
     console.log("🔄 Generando PDF con", registros.length, "registros...")
 
+    // Cargar librerías dinámicamente
+    const jsPDF = await loadPDFLibraries()
     const doc = new jsPDF()
+
+    // Verificar que autoTable esté disponible
+    if (typeof doc.autoTable !== "function") {
+      throw new Error("La función autoTable no está disponible")
+    }
 
     // Configurar fuente
     doc.setFont("helvetica")
@@ -112,7 +125,7 @@ export const generatePDF = (registros: ChoferRegistro[], title = "Registro de Ch
   }
 }
 
-export const downloadPDF = (registros: ChoferRegistro[], filename?: string) => {
+export const downloadPDF = async (registros: ChoferRegistro[], filename?: string) => {
   try {
     console.log("⬇️ Iniciando descarga de PDF...")
 
@@ -120,7 +133,7 @@ export const downloadPDF = (registros: ChoferRegistro[], filename?: string) => {
       throw new Error("No hay registros para descargar")
     }
 
-    const doc = generatePDF(registros)
+    const doc = await generatePDF(registros)
     const defaultFilename = `registro-choferes-${new Date().toISOString().split("T")[0]}.pdf`
     const finalFilename = filename || defaultFilename
 
@@ -135,7 +148,7 @@ export const downloadPDF = (registros: ChoferRegistro[], filename?: string) => {
   }
 }
 
-export const printPDF = (registros: ChoferRegistro[]) => {
+export const printPDF = async (registros: ChoferRegistro[]) => {
   try {
     console.log("🖨️ Iniciando impresión de PDF...")
 
@@ -143,7 +156,7 @@ export const printPDF = (registros: ChoferRegistro[]) => {
       throw new Error("No hay registros para imprimir")
     }
 
-    const doc = generatePDF(registros)
+    const doc = await generatePDF(registros)
     const pdfBlob = doc.output("blob")
     const pdfUrl = URL.createObjectURL(pdfBlob)
 
@@ -198,16 +211,67 @@ export const printPDF = (registros: ChoferRegistro[]) => {
 }
 
 // Función para verificar si las librerías están disponibles
-export const checkPDFLibraries = () => {
+export const checkPDFLibraries = async () => {
   try {
+    const jsPDF = await loadPDFLibraries()
     const doc = new jsPDF()
+
     if (typeof doc.autoTable !== "function") {
       throw new Error("jspdf-autotable no está disponible")
     }
+
     console.log("✅ Librerías PDF verificadas correctamente")
     return true
   } catch (error) {
     console.error("❌ Error verificando librerías PDF:", error)
     return false
+  }
+}
+
+// Función alternativa simple sin autoTable (fallback)
+export const generateSimplePDF = async (registros: ChoferRegistro[]) => {
+  try {
+    console.log("🔄 Generando PDF simple...")
+
+    const jsPDF = (await import("jspdf")).default
+    const doc = new jsPDF()
+
+    // Título
+    doc.setFontSize(16)
+    doc.text("Registro de Choferes", 105, 20, { align: "center" })
+
+    // Fecha
+    doc.setFontSize(10)
+    const fecha = new Date().toLocaleString("es-PE", { timeZone: "America/Lima" })
+    doc.text(`Generado: ${fecha}`, 105, 30, { align: "center" })
+
+    // Registros
+    let y = 50
+    doc.setFontSize(8)
+
+    registros.forEach((registro, index) => {
+      if (y > 270) {
+        doc.addPage()
+        y = 20
+      }
+
+      const fechaHora = new Date(registro.fecha_hora).toLocaleString("es-PE", {
+        timeZone: "America/Lima",
+      })
+
+      doc.text(`${index + 1}. ${registro.nombre_chofer} - ${registro.tipo}`, 10, y)
+      y += 5
+      doc.text(`   Destino: ${registro.destino || "-"}`, 10, y)
+      y += 5
+      doc.text(`   Responsable: ${registro.responsable || "-"}`, 10, y)
+      y += 5
+      doc.text(`   Fecha: ${fechaHora}`, 10, y)
+      y += 10
+    })
+
+    return doc
+  } catch (error) {
+    console.error("❌ Error generando PDF simple:", error)
+    throw error
   }
 }
