@@ -638,6 +638,8 @@ export default function ChoferRegistry() {
                       <TableHead>Tipo</TableHead>
                       <TableHead>Destino</TableHead>
                       <TableHead>Diligencia</TableHead>
+                      <TableHead>Sustento</TableHead>
+                      <TableHead>Solicitud</TableHead>
                       <TableHead>Responsable</TableHead>
                       <TableHead>Fecha y Hora</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
@@ -659,6 +661,8 @@ export default function ChoferRegistry() {
                         </TableCell>
                         <TableCell>{registro.destino || "-"}</TableCell>
                         <TableCell className="max-w-xs truncate">{registro.diligencia || "-"}</TableCell>
+                        <TableCell className="max-w-xs truncate">{registro.sustento || "-"}</TableCell>
+                        <TableCell className="max-w-xs truncate">{registro.solicitud || "-"}</TableCell>
                         <TableCell>{registro.responsable || "-"}</TableCell>
                         <TableCell className="text-sm">{formatDateTime(registro.fecha_hora)}</TableCell>
                         <TableCell className="text-right">
