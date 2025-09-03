@@ -47,6 +47,7 @@ const CHOFERES = [
   "Noronha Gomez Joao Andre",
   "Jhean Marco Guerra Vasquez",
   "Reategui Vasquez Javier",
+  "Egberto Carlos Laiche Flores",
 ]
 
 export default function ChoferRegistry() {
