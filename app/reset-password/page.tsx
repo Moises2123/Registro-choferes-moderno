@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,7 +14,6 @@ import { supabase } from "@/lib/supabase"
 
 export default function ResetPasswordPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -28,18 +27,26 @@ export default function ResetPasswordPage() {
   })
 
   useEffect(() => {
-    // Manejar el hash fragment de la URL (donde Supabase pone los tokens)
     const handleAuthCallback = async () => {
       try {
-        // Obtener el hash de la URL
+        console.log("Current URL:", window.location.href)
+        console.log("Hash:", window.location.hash)
+
+        // Verificar si hay parámetros en el hash (formato de Supabase)
         const hashParams = new URLSearchParams(window.location.hash.substring(1))
         const accessToken = hashParams.get("access_token")
         const refreshToken = hashParams.get("refresh_token")
         const type = hashParams.get("type")
 
-        console.log("Auth callback params:", { accessToken: !!accessToken, refreshToken: !!refreshToken, type })
+        console.log("Hash params:", {
+          accessToken: accessToken ? "present" : "missing",
+          refreshToken: refreshToken ? "present" : "missing",
+          type,
+        })
 
         if (type === "recovery" && accessToken && refreshToken) {
+          console.log("Processing recovery tokens...")
+
           // Establecer la sesión con los tokens de recuperación
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
@@ -48,13 +55,13 @@ export default function ResetPasswordPage() {
 
           if (error) {
             console.error("Error setting session:", error)
-            setError("Error al procesar el enlace de recuperación. Inténtalo de nuevo.")
+            setError("Error al procesar el enlace de recuperación. El enlace puede haber expirado.")
             setIsCheckingSession(false)
             return
           }
 
           if (data.session) {
-            console.log("Session established successfully")
+            console.log("Session established successfully for recovery")
             setIsValidSession(true)
           }
         } else {
@@ -69,7 +76,7 @@ export default function ResetPasswordPage() {
             setIsValidSession(true)
           } else {
             console.log("No valid session found")
-            setError("Enlace de recuperación inválido o expirado. Solicita uno nuevo.")
+            setError("Enlace de recuperación inválido o expirado. Por favor, solicita un nuevo enlace.")
           }
         }
       } catch (error) {
@@ -80,7 +87,9 @@ export default function ResetPasswordPage() {
       }
     }
 
-    handleAuthCallback()
+    // Esperar un poco para que la página cargue completamente
+    const timer = setTimeout(handleAuthCallback, 500)
+    return () => clearTimeout(timer)
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -194,7 +203,7 @@ export default function ResetPasswordPage() {
                 <ul className="text-sm text-blue-700 space-y-1">
                   <li>• Asegúrate de usar el enlace más reciente</li>
                   <li>• Los enlaces expiran después de 1 hora</li>
-                  <li>• Copia y pega la URL completa</li>
+                  <li>• Copia y pega la URL completa del email</li>
                   <li>• Solicita un nuevo enlace si es necesario</li>
                 </ul>
               </div>

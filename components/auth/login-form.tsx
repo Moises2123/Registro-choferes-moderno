@@ -111,11 +111,18 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setSuccess(null)
 
     try {
+      // Usar la URL actual del sitio para el redirect
+      const currentUrl = window.location.origin
+      const redirectUrl = `${currentUrl}/reset-password`
+
+      console.log("Sending recovery email with redirect:", redirectUrl)
+
       const { error } = await supabase.auth.resetPasswordForEmail(recoveryEmail, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: redirectUrl,
       })
 
       if (error) {
+        console.error("Recovery email error:", error)
         if (error.message.includes("User not found")) {
           setError("No encontramos una cuenta con este email. Verifica que sea correcto.")
         } else {
@@ -124,11 +131,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         return
       }
 
-      setSuccess("✅ Se ha enviado un enlace de recuperación a tu email. Revisa tu bandeja de entrada y spam.")
+      setSuccess(`✅ Se ha enviado un enlace de recuperación a ${recoveryEmail}. Revisa tu bandeja de entrada y spam.`)
       setRecoveryEmail("")
-
-      // No cerrar automáticamente para que el usuario pueda leer el mensaje
     } catch (error) {
+      console.error("Unexpected recovery error:", error)
       setError("Error inesperado. Inténtalo de nuevo.")
     } finally {
       setLoading(false)
