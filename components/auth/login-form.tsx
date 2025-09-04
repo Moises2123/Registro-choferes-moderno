@@ -2,13 +2,14 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, Lock, Mail, User } from "lucide-react"
+import { Eye, EyeOff, Lock, Mail, User, CheckCircle, AlertCircle } from "lucide-react"
 import { signIn, signUp, supabase } from "@/lib/supabase"
 
 interface LoginFormProps {
@@ -16,6 +17,7 @@ interface LoginFormProps {
 }
 
 export function LoginForm({ onSuccess }: LoginFormProps) {
+  const searchParams = useSearchParams()
   const [isLogin, setIsLogin] = useState(true)
   const [isRecoveryMode, setIsRecoveryMode] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -30,6 +32,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   })
   const [recoveryEmail, setRecoveryEmail] = useState("")
 
+  // Verificar mensajes de la URL
+  useEffect(() => {
+    const message = searchParams?.get("message")
+    if (message === "password-updated") {
+      setSuccess("¡Contraseña actualizada exitosamente! Ya puedes iniciar sesión con tu nueva contraseña.")
+    }
+  }, [searchParams])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -42,7 +52,13 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         const { data, error } = await signIn(formData.email, formData.password)
 
         if (error) {
-          setError(error.message)
+          if (error.message.includes("Invalid login credentials")) {
+            setError("Email o contraseña incorrectos. Verifica tus datos.")
+          } else if (error.message.includes("Email not confirmed")) {
+            setError("Debes confirmar tu email antes de iniciar sesión. Revisa tu bandeja de entrada.")
+          } else {
+            setError(error.message)
+          }
           return
         }
 
@@ -67,7 +83,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         const { data, error } = await signUp(formData.email, formData.password, formData.fullName)
 
         if (error) {
-          setError(error.message)
+          if (error.message.includes("User already registered")) {
+            setError("Este email ya está registrado. Intenta iniciar sesión o recuperar tu contraseña.")
+          } else {
+            setError(error.message)
+          }
           return
         }
 
@@ -96,16 +116,18 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       })
 
       if (error) {
-        setError(error.message)
+        if (error.message.includes("User not found")) {
+          setError("No encontramos una cuenta con este email. Verifica que sea correcto.")
+        } else {
+          setError(error.message)
+        }
         return
       }
 
-      setSuccess("Se ha enviado un enlace de recuperación a tu email. Revisa tu bandeja de entrada.")
+      setSuccess("✅ Se ha enviado un enlace de recuperación a tu email. Revisa tu bandeja de entrada y spam.")
       setRecoveryEmail("")
-      setTimeout(() => {
-        setIsRecoveryMode(false)
-        setSuccess(null)
-      }, 3000)
+
+      // No cerrar automáticamente para que el usuario pueda leer el mensaje
     } catch (error) {
       setError("Error inesperado. Inténtalo de nuevo.")
     } finally {
@@ -159,15 +181,29 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
               {error && (
                 <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
 
               {success && (
                 <Alert className="border-green-200 bg-green-50 text-green-800">
+                  <CheckCircle className="h-4 w-4" />
                   <AlertDescription>{success}</AlertDescription>
                 </Alert>
               )}
+
+              <div className="bg-blue-50 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Instrucciones:</strong>
+                </p>
+                <ul className="text-xs text-blue-700 mt-1 space-y-1">
+                  <li>• Recibirás un email con un enlace especial</li>
+                  <li>• El enlace expira en 1 hora</li>
+                  <li>• Revisa también tu carpeta de spam</li>
+                  <li>• Haz clic en el enlace para crear una nueva contraseña</li>
+                </ul>
+              </div>
 
               <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
                 {loading ? "Enviando..." : "Enviar Enlace de Recuperación"}
@@ -267,12 +303,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
               {error && (
                 <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
 
               {success && (
                 <Alert className="border-green-200 bg-green-50 text-green-800">
+                  <CheckCircle className="h-4 w-4" />
                   <AlertDescription>{success}</AlertDescription>
                 </Alert>
               )}
