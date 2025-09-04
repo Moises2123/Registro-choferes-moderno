@@ -72,6 +72,7 @@ import { ExportOptions } from "@/components/ui/export-options"
 import { testSupabaseConnection, checkTableExists } from "@/lib/supabase-check"
 import { LoginForm } from "@/components/auth/login-form"
 import { UserManagement } from "@/components/admin/user-management"
+import { ChangePassword } from "@/components/auth/change-password"
 
 const CHOFERES = [
   "Morris Larrañaga Policarpio",
@@ -1200,6 +1201,7 @@ export default function ChoferRegistry() {
           {userProfile?.role === "admin" && (
             <TabsContent value="admin" className="space-y-6">
               <UserManagement />
+              <ChangePassword />
             </TabsContent>
           )}
         </Tabs>
