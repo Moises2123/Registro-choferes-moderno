@@ -3,12 +3,22 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+
   typescript: {
     ignoreBuildErrors: true,
   },
+
   images: {
     unoptimized: true,
   },
-}
 
-export default nextConfig
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals.push("fflate");
+    }
+
+    return config;
+  },
+};
+
+export default nextConfig;
